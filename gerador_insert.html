@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <title>Gerador de Insert</title>
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 15px;
+        background-color: linen;
+        font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+      }
+
+      </style>
+</head>
+<body style="display: flex; flex-direction: column;">
+    <h2>Gerador de Insert</h2>
+    <div class="input-group mb-3 mt-4 w-50">
+      <label class="input-group-text" for="csvInput">Arquivo CSV</label>
+      <input accept=".csv" type="file" class="form-control" id="csvInput">
+    </div>
+    <div class="input-group mb-3 w-50">
+      <span class="input-group-text" id="inputGroup-sizing-default">Nome tabela</span>
+      <input id="nomeTabela" type="text" class="form-control" aria-label="Sizing example input" aria-describedby="inputGroup-sizing-default">
+    </div>
+    <div class="input-group mb-3 w-50">
+      <span class="input-group-text" id="inputGroup-sizing-default">Coluna para ignorar (id)</span>
+      <select class="form-select" aria-label="Coluna para ignorar (id)" id="ignorarColuna"></select>
+    </div>
+    <div class="input-group mb-3 mt-4 w-50">
+      <span class="input-group-text" id="inputGroup-sizing-default">Coluna para substituir valor</span>
+      <select class="form-select" aria-label="Coluna para ignorar (id)" id="substituirColuna"></select>
+    </div>
+    <div class="input-group mb-3 w-50">
+      <span class="input-group-text" id="inputGroup-sizing-default">Valor que será utilizado na substituição</span>
+      <input id="valorParaSubstituir" type="text" class="form-control" aria-label="Sizing example input" aria-describedby="inputGroup-sizing-default">
+    </div>
+    <div class="input-group mb-3 mt-4 w-50"></div>
+      <button id="generateButton" class="btn btn-success w-25 p-3">Gerar Insert Into</button>
+    </div>
+    <div class="input-group mt-4" style="height: 500px;">
+      <span class="input-group-text">Resultado</span>
+      <textarea id="exibicao" class="form-control" aria-label="With textarea"></textarea>
+    </div>
+    <script>
+        let fileInput;
+        let file;
+        let conteudoCSV;
+        let conteudoConvertido;
+        let nomeTabela;
+        let colunaParaIgnorar;
+        let indexColunaIgnorar;
+        let colunaParaSubstituirValor;
+        let indexColunaSubstituirValor;
+        let valorColunaSubstituir;
+        let exibicao = document.getElementById('exibicao');
+
+        document.getElementById('csvInput').addEventListener('change', lerArquivoCSV);
+        document.getElementById('generateButton').addEventListener('click', handlerGerarInserts);
+
+        function handlerGerarInserts() {
+          try {
+            gerarInserts();
+            console.info(`Insert executado com sucesso`);
+          } catch(error) {
+            console.error(`Falha ao gerar insert`, error);
+          }
+        }
+
+        function handlerVariaveis() {
+          resetarVariaveis();
+          popularVariaveis();
+        }
+
+        function resetarVariaveis() {
+          nomeTabela = null;
+          colunaParaIgnorar = null;
+          indexColunaIgnorar = null;
+          colunaParaSubstituirValor = null;
+          indexColunaSubstituirValor = null;
+          valorColunaSubstituir = null;
+        }
+
+        function popularVariaveis() {
+          nomeTabela = document.getElementById('nomeTabela').value;
+          colunaParaIgnorar = document.getElementById('ignorarColuna').value;
+          colunaParaSubstituirValor = document.getElementById('substituirColuna').value;
+          valorColunaSubstituir = document.getElementById('valorParaSubstituir').value;
+        }
+
+        // Lê o arquivo que foi selecionado no input
+        function lerArquivoCSV() {
+          handlerVariaveis();
+          fileInput = document.getElementById('csvInput');
+          file = fileInput.files[0];
+          
+          if (!file) {
+            console.error('Nenhum arquivo selecionado.');
+            return;
+          }
+
+          let reader = new FileReader();
+          reader.onload = function(e) {
+            conteudoCSV = e.target.result;
+            popularSelectIgnorarColuna();
+          };
+          reader.readAsText(file);
+        }
+
+        function popularSelectIgnorarColuna() {
+          let linhas = conteudoCSV.split("\n");
+          let cabecalhos = linhas[0].split("|");
+          let selectIgnorarColuna = document.getElementById('ignorarColuna');
+          let selectSubstituirColuna = document.getElementById('substituirColuna');
+          
+          // Limpa as opções atuais
+          selectIgnorarColuna.innerHTML = '';
+          selectSubstituirColuna.innerHTML = '';
+          criarOpcaoSelect(selectIgnorarColuna, "");
+          criarOpcaoSelect(selectSubstituirColuna, "");
+
+          // Adiciona uma opção para cada cabeçalho
+          cabecalhos.forEach(opcao => {
+            criarOpcaoSelect(selectIgnorarColuna, opcao);
+            criarOpcaoSelect(selectSubstituirColuna, opcao);
+          });
+        }
+
+        function criarOpcaoSelect(select, opcao) {
+          let option = document.createElement('option');
+          option.value = opcao;
+          option.text = opcao;
+          select.add(option);
+        }
+
+        // Converte as linhas de dados CSV em inserts MySQL
+        function gerarInserts() {
+          handlerVariaveis();
+          let arquivoFinal = "";
+          let updateAtual = "";
+          let linhas = conteudoCSV.split("\n");
+          let cabecalhos = linhas[0].split("|");
+
+          for(let [i, linha] of linhas.entries()) {
+            if(linha === linhas[0]) continue;
+            if(!linha) continue;
+            let colunas = linha.split("|");
+            let camposCabecalho = montarCabecalho(cabecalhos);
+
+            updateAtual += `insert into ${nomeTabela} (${camposCabecalho}`
+
+            for(let [index, dado] of colunas.entries()) {
+              let dadoTratado;
+              if(index === indexColunaIgnorar) continue;
+              if(index === indexColunaSubstituirValor) {
+                dadoTratado = tratarDado(valorColunaSubstituir);
+              } else {
+                dadoTratado = tratarDado(dado);
+              }
+              if(index === colunas.length-1) {
+                updateAtual += `${dadoTratado});`;
+                arquivoFinal += `\n${updateAtual}`;
+                updateAtual = "";
+              } else {
+                updateAtual += `${dadoTratado},`;
+              }
+            }
+          }
+          exibicao.innerHTML = arquivoFinal;
+        }
+
+        // Monta a definição das colunas conforme cabeçalho do CSV
+        function montarCabecalho(cabecalhos) {
+          let cabecalhoMontado = "";
+
+          for(let [index, campo] of cabecalhos.entries()) {
+            if(campo === colunaParaIgnorar) {
+              indexColunaIgnorar = index;
+              continue
+            };
+            if(campo === colunaParaSubstituirValor) {
+              indexColunaSubstituirValor = index;
+            }
+            if(index === cabecalhos.length-1) { 
+              cabecalhoMontado += `${campo}) \nvalues (` 
+            } else {
+              cabecalhoMontado += `${campo},`;
+            }
+          }
+          return cabecalhoMontado;
+        }
+
+        // Trata o valor para retornar no formato esperado pelo MySQL
+        function tratarDado(dado) {
+          if(dado == "null" || !isNaN(dado) || typeof dado === "boolean") return dado;
+          return `"${dado}"`;
+        }
+    </script>
+</body>
+</html>
